@@ -4,7 +4,19 @@ import { dirname, join, resolve } from 'node:path';
 import type { DshworkHost } from './host';
 
 const FEED = 'https://dsh-plugin.work/data/picks.json';
+const EXPLORE = 'https://dsh-plugin.work/api/v1/plugins';
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** TTL 缓存（picks feed + explore 响应 + 白名单目标）。 */
+let cache: { at: number; picks: unknown; explore: Map<string, unknown>; targets: Set<string> | null } = {
+  at: 0,
+  picks: null,
+  explore: new Map(),
+  targets: null,
+};
+function cacheFresh(): boolean {
+  return cache.at !== 0 && Date.now() - cache.at < 10 * 60 * 1000;
+}
 
 function sendJson(res: import('node:http').ServerResponse, body: unknown): void {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -96,17 +108,28 @@ function runInstall(target: string, res: import('node:http').ServerResponse): vo
 }
 
 /** Install targets of the curated picks feed (e.g. `github:owner/repo` or `@scope/name`). Cached 10 min. */
-let targetsCache: { at: number; set: Set<string> } | null = null;
 async function allowedTargets(): Promise<Set<string>> {
-  if (targetsCache !== null && Date.now() - targetsCache.at < 10 * 60 * 1000) return targetsCache.set;
+  if (cache.targets !== null && cacheFresh()) return cache.targets;
+  const set = new Set<string>();
   try {
-    const data = (await (await fetch(FEED)).json()) as { picks?: Array<{ install: string }> };
-    const set = new Set((data.picks ?? []).map((pick) => pick.install.replace(/^dsh plugin add\s+/, '')));
-    targetsCache = { at: Date.now(), set };
-    return set;
-  } catch {
-    return targetsCache?.set ?? new Set();
-  }
+    const picks = (await (await fetch(FEED)).json()) as { picks?: Array<{ install: string }> };
+    for (const pick of picks.picks ?? []) set.add(pick.install.replace(/^dsh plugin add\s+/, ''));
+  } catch { /* ignore */ }
+  try {
+    for (let offset = 0; offset < 1000; offset += 100) {
+      const data = (await (await fetch(`${EXPLORE}?sort=stars&min_stars=100&limit=100&offset=${offset}`)).json()) as {
+        data?: Array<{ installCommand: string | null }>;
+      };
+      const items = data.data ?? [];
+      for (const item of items) {
+        if (item.installCommand) set.add(item.installCommand.replace(/^dsh plugin add\s+/, ''));
+      }
+      if (items.length < 100) break;
+    }
+  } catch { /* ignore */ }
+  cache.targets = set;
+  cache.at = Date.now();
+  return set;
 }
 
 export function mountDshworkRoutes(host: DshworkHost): () => void {
@@ -121,6 +144,36 @@ export function mountDshworkRoutes(host: DshworkHost): () => void {
         sendJson(res, data);
       } catch {
         sendJson(res, { picks: [] });
+      }
+    },
+  }));
+
+  // Popular explore feed, proxied from the site API (stars >= 100, optional
+  // kind filter, paginated). Server-side proxy avoids browser CORS.
+  disposers.push(host.webServer.register({
+    kind: 'exact',
+    path: '/dshwork/explore',
+    handler: async (req, res) => {
+      const url = new URL(req.url ?? '/', 'http://x');
+      const params = new URLSearchParams({
+        sort: 'stars',
+        min_stars: '100',
+      });
+      for (const key of ['kind', 'limit', 'offset']) {
+        const value = url.searchParams.get(key);
+        if (value) params.set(key, value);
+      }
+      const key = params.toString();
+      if (cache.explore.has(key) && cacheFresh()) {
+        return sendJson(res, cache.explore.get(key));
+      }
+      try {
+        const data = await (await fetch(`${EXPLORE}?${key}`)).json();
+        cache.explore.set(key, data);
+        cache.at = Date.now();
+        sendJson(res, data);
+      } catch {
+        sendJson(res, { data: [], page: { offset: 0, limit: 0, total: 0, has_more: false } });
       }
     },
   }));
