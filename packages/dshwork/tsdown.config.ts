@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsdown';
 
-const id = 'dshwork';
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { name: string };
+// The bundle registers itself under the package name: the host's client-modules
+// node half keys its boot graph rows by loader entry name (= package name), and
+// arrive() checks __ModuleLoader__ for exactly that id.
+const id = pkg.name;
 const CLIENT_EXTERNALS = ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives'];
 
 export default defineConfig({
