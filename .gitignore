@@ -1,0 +1,5 @@
+node_modules/
+**/node_modules/
+packages/dshwork/lib/
+**/client/client.js
+*.tsbuildinfo

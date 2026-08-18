@@ -1,0 +1,4 @@
+# @dshwork/llm-provider-proxy bundle layer — dsh plugin add 自动挂载本包
+- insert:
+    - id: dsh-provider-proxy
+      name: '@dshwork/llm-provider-proxy'

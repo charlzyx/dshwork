@@ -1,0 +1,10 @@
+{
+  "name": "dshwork-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "publish:all": "pnpm -r publish --no-git-checks"
+  }
+}
