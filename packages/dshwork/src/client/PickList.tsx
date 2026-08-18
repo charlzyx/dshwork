@@ -83,10 +83,11 @@ export function PickList({ t }: { t: Translate }): ReactElement {
   const install = (pick: PickItem) => {
     setBusy(pick.id);
     setStatus(null);
+    const target = pick.install.replace(/^dsh plugin add\s+/, '');
     fetch('/dshwork/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ github: pick.github }),
+      body: JSON.stringify({ target }),
     })
       .then((r) => r.json())
       .then((d) => {
