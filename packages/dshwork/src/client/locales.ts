@@ -1,6 +1,7 @@
 export const zh = {
-  title: '人工精选',
-  subtitle: '不看 Star，人工一条条挑的。',
+  title: '编辑精选',
+  subtitle: '编辑逐个人工核实过，质量优先，不按 Star 排序。',
+  loading: '加载中…',
   install: '一键安装',
   installing: '安装中…',
   installed: '已安装，刷新页面生效',
@@ -10,8 +11,9 @@ export const zh = {
 };
 
 export const en = {
-  title: 'Pick By Human',
-  subtitle: 'Not by stars — picked one by one.',
+  title: "Editor's Picks",
+  subtitle: 'Hand-verified by editors — quality first, not sorted by stars.',
+  loading: 'Loading…',
   install: 'Install',
   installing: 'Installing…',
   installed: 'Installed — refresh to activate',
