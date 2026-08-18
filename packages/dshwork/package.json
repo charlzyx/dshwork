@@ -1,6 +1,6 @@
 {
   "name": "@dshwork/dshwork",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "dsh-plugin.work inside DeepSeek Harness — hand-picked projects with one-click install.",
   "type": "module",
   "main": "lib/index.js",

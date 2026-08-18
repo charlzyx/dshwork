@@ -7,6 +7,10 @@ type PickItem = {
   category: string;
   github: string;
   install: string;
+  /** 是否可在 DSH 内一键安装；false = 独立 CLI / 桌面应用 / 资源列表，站内装不了。 */
+  installable?: boolean;
+  /** installable=false 时的替代安装说明。 */
+  installHint?: { en: string; zh: string };
   reason: { en: string; zh: string };
 };
 
@@ -61,8 +65,17 @@ const styles = {
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
   } as CSSProperties,
-  actions: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 'auto', paddingTop: 4 },
+  actions: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 'auto', paddingTop: 4 },
   github: { fontSize: 12, color: 'var(--dsw-alias-label-dimmed)', textDecoration: 'none' },
+  notInstallable: {
+    flexShrink: 0,
+    fontSize: 11,
+    lineHeight: 1,
+    padding: '5px 9px',
+    borderRadius: 999,
+    color: 'var(--dsw-alias-label-secondary)',
+    border: '1px dashed var(--dsw-alias-border-l2)',
+  },
   status: { fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 },
   loading: { fontSize: 13, color: 'var(--dsw-alias-label-dimmed)' },
   footer: { marginTop: 4, fontSize: 12, color: 'var(--dsw-alias-label-dimmed)', textAlign: 'center' },
@@ -116,13 +129,15 @@ export function PickList({ t }: { t: Translate }): ReactElement {
               ),
               h('div', { style: styles.reason, title: pick.reason.zh || pick.reason.en }, pick.reason.zh || pick.reason.en),
               h('div', { style: styles.actions },
-                h(Button, {
-                  variant: 'primary',
-                  size: 'sm',
-                  disabled: busy === pick.id,
-                  onClick: () => install(pick),
-                }, busy === pick.id ? t('installing') : t('install')),
                 h('a', { href: `https://github.com/${pick.github}`, target: '_blank', rel: 'noreferrer', style: styles.github }, 'GitHub ↗'),
+                pick.installable === false
+                  ? h('span', { style: styles.notInstallable, title: (pick.installHint?.zh ?? pick.installHint?.en) || '' }, t('notInstallable'))
+                  : h(Button, {
+                      variant: 'primary',
+                      size: 'sm',
+                      disabled: busy === pick.id,
+                      onClick: () => install(pick),
+                    }, busy === pick.id ? t('installing') : t('install')),
               ),
             ),
           ),
