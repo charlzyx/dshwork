@@ -28,13 +28,14 @@ type Translate = (key: string) => string;
 type Status = { kind: 'ok' | 'error'; text: string };
 
 const PAGE = 8;
-const KIND_TAGS = ['', 'plugin', 'webui', 'desktop_app', 'collection', 'other'] as const;
+const KIND_TAGS = ['', 'plugin', 'webui', 'desktop_app', 'collection'] as const;
 
 const styles = {
   container: { padding: 18, display: 'flex', flexDirection: 'column', gap: 14 },
   header: { display: 'flex', flexDirection: 'column', gap: 2 },
   title: { fontWeight: 650, fontSize: 16, color: 'var(--dsw-alias-label-primary)' },
   subtitle: { fontSize: 13, color: 'var(--dsw-alias-label-secondary)' },
+  siteLink: { fontSize: 12, color: 'var(--dsw-alias-brand-primary)', textDecoration: 'none', whiteSpace: 'nowrap' },
   tabs: { display: 'flex', gap: 6, padding: 3, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 999, alignSelf: 'flex-start' },
   tab: {
     padding: '5px 14px',
@@ -120,10 +121,9 @@ const styles = {
 
 const KIND_LABEL_KEY: Record<string, string> = {
   plugin: 'kindPlugin',
+  webui: 'kindWebUI',
   desktop_app: 'kindDesktopApp',
   collection: 'kindCollection',
-  library: 'kindLibrary',
-  docs: 'kindDocs',
   other: 'kindOther',
 };
 
@@ -147,7 +147,7 @@ export function PickList({ t }: { t: Translate }): ReactElement {
 
   const loadPopular = useCallback(() => {
     setStatus(null);
-    const qs = `sort=stars&min_stars=100${query ? `&q=${encodeURIComponent(query.trim())}` : ''}${kind ? `&kind=${kind}` : ''}&limit=${PAGE}&offset=${offset}`;
+    const qs = `sort=stars&min_stars=100&exclude_other=1${query ? `&q=${encodeURIComponent(query.trim())}` : ''}${kind ? `&kind=${kind}` : ''}&limit=${PAGE}&offset=${offset}`;
     fetch(`/dshwork/explore?${qs}`)
       .then((r) => r.json())
       .then((d) => {
@@ -199,29 +199,35 @@ export function PickList({ t }: { t: Translate }): ReactElement {
   return h('div', { style: styles.container },
     h('div', { style: styles.header },
       h('div', { style: styles.title }, t('title')),
-      h('div', { style: styles.subtitle }, t(tab === 'picks' ? 'subtitle' : 'popularSubtitle')),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+        h('span', { style: styles.subtitle }, t(tab === 'picks' ? 'subtitle' : 'popularSubtitle')),
+        h('a', { href: 'https://dsh-plugin.work', target: '_blank', rel: 'noreferrer', style: styles.siteLink }, 'dsh-plugin.work'),
+      ),
     ),
-    h('div', { style: styles.tabs },
-      h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'picks' ? styles.tabActive : {}) }, onClick: () => { setTab('picks'); setStatus(null); } }, t('tabPicks')),
-      h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'popular' ? styles.tabActive : {}) }, onClick: () => { setTab('popular'); setStatus(null); } }, t('tabPopular')),
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+      h('div', { style: styles.tabs },
+        h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'picks' ? styles.tabActive : {}) }, onClick: () => { setTab('picks'); setStatus(null); } }, t('tabPicks')),
+        h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'popular' ? styles.tabActive : {}) }, onClick: () => { setTab('popular'); setStatus(null); } }, t('tabPopular')),
+      ),
+      h('input', {
+        type: 'search',
+        value: query,
+        placeholder: t('searchPlaceholder'),
+        style: {
+          flex: 1,
+          minWidth: 0,
+          minHeight: 30,
+          borderRadius: 999,
+          border: '1px solid var(--dsw-alias-border-l2)',
+          background: 'var(--dsw-alias-bg-layer-1)',
+          color: 'var(--dsw-alias-label-primary)',
+          padding: '4px 12px',
+          fontSize: 12.5,
+          outline: 'none',
+        } as CSSProperties,
+        onInput: (event) => switchQuery((event.target as HTMLInputElement).value),
+      }),
     ),
-    h('input', {
-      type: 'search',
-      value: query,
-      placeholder: t('searchPlaceholder'),
-      style: {
-        width: '100%',
-        minHeight: 32,
-        borderRadius: 10,
-        border: '1px solid var(--dsw-alias-border-l2)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        color: 'var(--dsw-alias-label-primary)',
-        padding: '6px 12px',
-        fontSize: 13,
-        outline: 'none',
-      } as CSSProperties,
-      onInput: (event) => switchQuery((event.target as HTMLInputElement).value),
-    }),
     tab === 'popular'
       ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
           h('div', { style: styles.tags },
@@ -299,9 +305,6 @@ export function PickList({ t }: { t: Translate }): ReactElement {
           },
         }, status.text)
       : null,
-    h('div', { style: styles.footer },
-      t('builtBy'), ' · ',
-      h('a', { href: 'https://dsh-plugin.work', target: '_blank', rel: 'noreferrer', style: styles.github }, 'dsh-plugin.work'),
-    ),
+
   );
 }
