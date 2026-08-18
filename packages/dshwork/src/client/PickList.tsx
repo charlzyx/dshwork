@@ -161,7 +161,7 @@ export function PickList({ t }: { t: Translate }): ReactElement {
   }, [tab, kind, offset, loadPopular]);
 
   const install = (title: string, installCmd: string) => {
-    const target = installCmd.replace(/^dsh plugin add\s+/, '');
+    const target = installCmd.replace(/^dsh plugin(?:\s+--profile\s+\S+)?\s+add\s+/, '').trim();
     setBusy(title);
     setStatus(null);
     fetch('/dshwork/install', {

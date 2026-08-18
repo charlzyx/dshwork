@@ -107,13 +107,18 @@ function runInstall(target: string, res: import('node:http').ServerResponse): vo
   });
 }
 
+/** 从安装命令提取 target：兼容 `dsh plugin add X` 与 `dsh plugin --profile web add X`。 */
+function installTarget(install: string): string {
+  return install.replace(/^dsh plugin(?:\s+--profile\s+\S+)?\s+add\s+/, '').trim();
+}
+
 /** Install targets of the curated picks feed (e.g. `github:owner/repo` or `@scope/name`). Cached 10 min. */
 async function allowedTargets(): Promise<Set<string>> {
   if (cache.targets !== null && cacheFresh()) return cache.targets;
   const set = new Set<string>();
   try {
     const picks = (await (await fetch(FEED)).json()) as { picks?: Array<{ install: string }> };
-    for (const pick of picks.picks ?? []) set.add(pick.install.replace(/^dsh plugin add\s+/, ''));
+    for (const pick of picks.picks ?? []) set.add(installTarget(pick.install));
   } catch { /* ignore */ }
   try {
     for (let offset = 0; offset < 1000; offset += 100) {
@@ -122,7 +127,7 @@ async function allowedTargets(): Promise<Set<string>> {
       };
       const items = data.data ?? [];
       for (const item of items) {
-        if (item.installCommand) set.add(item.installCommand.replace(/^dsh plugin add\s+/, ''));
+        if (item.installCommand) set.add(installTarget(item.installCommand));
       }
       if (items.length < 100) break;
     }
