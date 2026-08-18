@@ -28,7 +28,7 @@ type Translate = (key: string) => string;
 type Status = { kind: 'ok' | 'error'; text: string };
 
 const PAGE = 8;
-const KIND_TAGS = ['', 'plugin', 'webui', 'desktop_app', 'collection'] as const;
+const KIND_TAGS = ['', 'plugin', 'webui', 'ecosystem', 'collection'] as const;
 
 const styles = {
   container: { padding: 18, display: 'flex', flexDirection: 'column', gap: 14 },
@@ -122,7 +122,7 @@ const styles = {
 const KIND_LABEL_KEY: Record<string, string> = {
   plugin: 'kindPlugin',
   webui: 'kindWebUI',
-  desktop_app: 'kindDesktopApp',
+  ecosystem: 'kindDesktopApp',
   collection: 'kindCollection',
   other: 'kindOther',
 };
