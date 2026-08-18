@@ -1,5 +1,7 @@
 export const zh = {
-  title: '编辑精选',
+  title: 'DshWork',
+  searchPlaceholder: '搜索插件…',
+  searchClear: '清除',
   subtitle: '编辑逐个人工核实过，质量优先，不按 Star 排序。',
   tabPicks: '精选',
   tabPopular: '热门',
@@ -25,7 +27,9 @@ export const zh = {
 };
 
 export const en = {
-  title: "Editor's Picks",
+  title: 'DshWork',
+  searchPlaceholder: 'Search plugins…',
+  searchClear: 'Clear',
   subtitle: 'Hand-verified by editors — quality first, not sorted by stars.',
   tabPicks: 'Picks',
   tabPopular: 'Popular',

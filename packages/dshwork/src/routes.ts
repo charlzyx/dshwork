@@ -164,7 +164,7 @@ export function mountDshworkRoutes(host: DshworkHost): () => void {
         sort: 'stars',
         min_stars: '100',
       });
-      for (const key of ['kind', 'limit', 'offset']) {
+      for (const key of ['q', 'kind', 'limit', 'offset']) {
         const value = url.searchParams.get(key);
         if (value) params.set(key, value);
       }

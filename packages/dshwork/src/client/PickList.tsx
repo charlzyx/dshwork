@@ -27,8 +27,8 @@ type Translate = (key: string) => string;
 
 type Status = { kind: 'ok' | 'error'; text: string };
 
-const PAGE = 24;
-const KIND_TAGS = ['', 'plugin', 'webui', 'desktop_app', 'collection', 'library', 'docs', 'other'] as const;
+const PAGE = 8;
+const KIND_TAGS = ['', 'plugin', 'webui', 'desktop_app', 'collection', 'other'] as const;
 
 const styles = {
   container: { padding: 18, display: 'flex', flexDirection: 'column', gap: 14 },
@@ -134,6 +134,7 @@ export function PickList({ t }: { t: Translate }): ReactElement {
   const [kind, setKind] = useState('');
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
+  const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
 
@@ -146,7 +147,7 @@ export function PickList({ t }: { t: Translate }): ReactElement {
 
   const loadPopular = useCallback(() => {
     setStatus(null);
-    const qs = `sort=stars&min_stars=100${kind ? `&kind=${kind}` : ''}&limit=${PAGE}&offset=${offset}`;
+    const qs = `sort=stars&min_stars=100${query ? `&q=${encodeURIComponent(query.trim())}` : ''}${kind ? `&kind=${kind}` : ''}&limit=${PAGE}&offset=${offset}`;
     fetch(`/dshwork/explore?${qs}`)
       .then((r) => r.json())
       .then((d) => {
@@ -154,7 +155,7 @@ export function PickList({ t }: { t: Translate }): ReactElement {
         setTotal(d.page?.total ?? 0);
       })
       .catch(() => setStatus({ kind: 'error', text: t('loadFailed') }));
-  }, [kind, offset, t]);
+  }, [kind, offset, query, t]);
 
   useEffect(() => {
     if (tab === 'popular') loadPopular();
@@ -186,6 +187,14 @@ export function PickList({ t }: { t: Translate }): ReactElement {
     setKind(value);
     setOffset(0);
   };
+  const switchQuery = (value: string) => {
+    setQuery(value);
+    setOffset(0);
+  };
+  const q = query.trim().toLowerCase();
+  const filteredPicks = q
+    ? picks.filter((pick) => `${pick.title} ${pick.reason.zh} ${pick.reason.en}`.toLowerCase().includes(q))
+    : picks;
 
   return h('div', { style: styles.container },
     h('div', { style: styles.header },
@@ -196,6 +205,23 @@ export function PickList({ t }: { t: Translate }): ReactElement {
       h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'picks' ? styles.tabActive : {}) }, onClick: () => { setTab('picks'); setStatus(null); } }, t('tabPicks')),
       h('button', { type: 'button', style: { ...styles.tab, ...(tab === 'popular' ? styles.tabActive : {}) }, onClick: () => { setTab('popular'); setStatus(null); } }, t('tabPopular')),
     ),
+    h('input', {
+      type: 'search',
+      value: query,
+      placeholder: t('searchPlaceholder'),
+      style: {
+        width: '100%',
+        minHeight: 32,
+        borderRadius: 10,
+        border: '1px solid var(--dsw-alias-border-l2)',
+        background: 'var(--dsw-alias-bg-layer-1)',
+        color: 'var(--dsw-alias-label-primary)',
+        padding: '6px 12px',
+        fontSize: 13,
+        outline: 'none',
+      } as CSSProperties,
+      onInput: (event) => switchQuery((event.target as HTMLInputElement).value),
+    }),
     tab === 'popular'
       ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
           h('div', { style: styles.tags },
@@ -242,9 +268,9 @@ export function PickList({ t }: { t: Translate }): ReactElement {
           ),
         )
       : h('div', { style: styles.grid },
-          picks.length === 0 && status === null
+          filteredPicks.length === 0 && status === null
             ? h('div', { style: styles.loading }, t('loading'))
-            : picks.map((pick) =>
+            : filteredPicks.map((pick) =>
                 h('div', { key: pick.id, style: styles.card },
                   h('div', { style: styles.cardHeader },
                     h('span', { style: styles.cardTitle, title: pick.title }, pick.title),
