@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { DshworkHost } from './host';
@@ -72,39 +73,118 @@ function killTree(child: ChildProcess): void {
   }
 }
 
-/** Run `dsh plugin add` and answer the request once the child settles. */
-function runInstall(target: string, res: import('node:http').ServerResponse): void {
+interface RunResult {
+  exitCode: number;
+  timedOut: boolean;
+  stdout: string;
+  stderr: string;
+}
+
+/** Run one `dsh plugin --profile web <args…>` command, capturing output with timeout + group kill. */
+function runOp(pluginArgs: string[]): Promise<RunResult> {
   const { file, args, cwd } = dshInvocation();
-  const child = spawn(file, [...args, 'plugin', '--profile', 'web', 'add', target], {
-    cwd,
-    env: spawnEnv(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: process.platform !== 'win32',
+  return new Promise((resolvePromise) => {
+    const child = spawn(file, [...args, 'plugin', '--profile', 'web', ...pluginArgs], {
+      cwd,
+      env: spawnEnv(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(child);
+    }, INSTALL_TIMEOUT_MS);
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout = (stdout + chunk.toString()).slice(-256 * 1024);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr = (stderr + chunk.toString()).slice(-64 * 1024);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolvePromise({ exitCode: code ?? 1, timedOut, stdout, stderr });
+    });
   });
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    killTree(child);
-  }, INSTALL_TIMEOUT_MS);
-  child.stdout?.on('data', (chunk: Buffer) => {
-    stdout = (stdout + chunk.toString()).slice(-64 * 1024);
-  });
-  child.stderr?.on('data', (chunk: Buffer) => {
-    stderr = (stderr + chunk.toString()).slice(-32 * 1024);
-  });
-  child.on('error', (error) => {
-    clearTimeout(timer);
-    sendJson(res, { ok: false, code: 127, error: `cannot start dsh: ${error.message}` });
-  });
-  child.on('close', (code) => {
-    clearTimeout(timer);
-    const failed = code !== 0 || timedOut;
-    sendJson(res, failed
-      ? { ok: false, code, ...(timedOut ? { error: 'timed out' } : { error: (stderr || stdout).trim().slice(-400) || 'install failed' }) }
-      : { ok: true, code });
-  });
+}
+
+/** pnpm 9 refuses `add` at a workspace root without -w; inject it when the profile is one. */
+function pluginArgsFor(verb: string, target: string): string[] {
+  const profileDir = join(homedir(), '.dsh', 'profiles', 'web');
+  const args = [verb, target];
+  if ((verb === 'add' || verb === 'remove') && existsSync(join(profileDir, 'pnpm-workspace.yaml'))) {
+    args.splice(1, 0, '-w');
+  }
+  return args;
+}
+
+interface Failure { code: string; message: string }
+
+/**
+ * Map pnpm's raw diagnostics onto a recoverable mode + a bilingual actionable
+ * message. Mirrors dshmarket's `classifyPnpmFailure`: dsh's own wrapper line
+ * ("dsh: pnpm failed in profile directory …") names no cause, so we recognize
+ * pnpm's real diagnostics ourselves.
+ */
+function classifyFailure(output: string): Failure | null {
+  if (output.includes('ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF')) {
+    return { code: 'hoist-pattern', message: 'profile 的 node_modules 是旧版 pnpm 创建的，与当前 pnpm 不兼容，需重建后重试 / the profile node_modules was built by a different pnpm major and must be rebuilt before changes apply' };
+  }
+  if (output.includes('ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION') || output.includes('ERR_PNPM_NO_MATURE_MATCHING_VERSION')) {
+    return { code: 'release-age', message: 'profile 里有刚发布不久的插件版本，触发了 pnpm 的安全等待期检查；已自动放行重试一次，若仍失败请稍后再试 / a recently published plugin version trips pnpm`s fresh-release check; retried once with a one-shot bypass' };
+  }
+  if (output.includes('ERR_PNPM_IGNORED_BUILDS') || output.includes('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED')) {
+    return { code: 'build-blocked', message: '有依赖需要执行构建脚本，被 pnpm 默认拦截，需在 allowBuilds 放行后重试 / a dependency needs build scripts that pnpm blocks by default; allow it under allowBuilds and retry' };
+  }
+  if (output.includes('ERR_PNPM_FETCH_404')) {
+    return { code: 'fetch-404', message: '有依赖在 registry 上不存在（可能是之前失败操作残留的幽灵依赖，或私有包需登录）/ a dependency cannot be resolved (ghost entry from an earlier failed step, or a private package needing credentials)' };
+  }
+  if (/ERR_PNPM_FETCH_5\d\d|ERR_PNPM_META_FETCH_FAIL|FetchError|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|socket hang up|network timeout/i.test(output)) {
+    return { code: 'transient-network', message: '拉取依赖时网络临时失败（安装会重放整个依赖树，任一既有依赖抖动都会中断）；已自动重试一次，仍失败请稍后再试 / a transient network failure during dependency fetch; one automatic retry also failed — try again shortly' };
+  }
+  if (/operation was aborted due to timeout|TimeoutError|error \(23\)/i.test(output)) {
+    return { code: 'fetch-timeout', message: '下载超时（github 源会下载整个仓库或网络较慢）；已用更长超时自动重试一次 / download timed out (github sources fetch the whole repo / slow network); retried once with a longer limit' };
+  }
+  if (output.includes('pnpm not found on PATH')) {
+    return { code: 'pnpm-missing', message: '找不到 pnpm / pnpm is not on PATH' };
+  }
+  return null;
+}
+
+/** Run the install with automatic recovery for the known pnpm traps (mirrors dshmarket's withHoistRecovery). */
+async function runInstallAsync(target: string): Promise<{ ok: boolean; code?: number; error?: string }> {
+  const addArgs = pluginArgsFor('add', target);
+  const ok = (r: RunResult): boolean => r.exitCode === 0 && !r.timedOut;
+  let result = await runOp(addArgs);
+  if (!ok(result)) {
+    const failure = classifyFailure(`${result.stderr}\n${result.stdout}`);
+    if (failure?.code === 'release-age') {
+      result = await runOp([...addArgs, '--config.minimumReleaseAge=0']);
+    } else if (failure?.code === 'transient-network') {
+      result = await runOp(addArgs);
+    } else if (failure?.code === 'fetch-timeout') {
+      result = await runOp([...addArgs, '--config.fetchTimeout=600000']);
+    } else if (failure?.code === 'hoist-pattern') {
+      await runOp(['install', '--no-frozen-lockfile']);
+      result = await runOp(addArgs);
+    }
+    if (!ok(result)) {
+      const finalFailure = classifyFailure(`${result.stderr}\n${result.stdout}`);
+      const raw = (result.stderr || result.stdout).trim().slice(-300);
+      return {
+        ok: false,
+        code: result.exitCode,
+        error: result.timedOut ? 'timed out' : (finalFailure?.message ?? raw ?? 'install failed'),
+      };
+    }
+  }
+  return { ok: true, code: result.exitCode };
 }
 
 /** 从安装命令提取 target：兼容 `dsh plugin add X` 与 `dsh plugin --profile web add X`。 */
@@ -201,7 +281,8 @@ export function mountDshworkRoutes(host: DshworkHost): () => void {
           if (!target) return sendJson(res, { ok: false, error: 'missing target' });
           const allowed = await allowedTargets();
           if (!allowed.has(target)) return sendJson(res, { ok: false, error: 'target not allowed' });
-          runInstall(target, res);
+          const result = await runInstallAsync(target);
+          sendJson(res, result);
         } catch {
           sendJson(res, { ok: false, error: 'bad request' });
         }
