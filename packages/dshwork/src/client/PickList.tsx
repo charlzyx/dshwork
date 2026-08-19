@@ -115,6 +115,7 @@ const styles = {
   pager: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
   pagerInfo: { fontSize: 12, color: 'var(--dsw-alias-label-dimmed)' },
   status: { fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 },
+  itemStatus: { fontSize: 12, lineHeight: 1.5, marginTop: 6, wordBreak: 'break-all' },
   loading: { fontSize: 13, color: 'var(--dsw-alias-label-dimmed)' },
   footer: { marginTop: 4, fontSize: 12, color: 'var(--dsw-alias-label-dimmed)', textAlign: 'center' },
 } satisfies Record<string, CSSProperties>;
@@ -137,6 +138,8 @@ export function PickList({ t }: { t: Translate }): ReactElement {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  /** Per-card install outcome (ok/error), keyed by the rendered card key. */
+  const [itemStatus, setItemStatus] = useState<Record<string, Status | null>>({});
 
   useEffect(() => {
     fetch('/dshwork/picks.json')
@@ -161,22 +164,45 @@ export function PickList({ t }: { t: Translate }): ReactElement {
     if (tab === 'popular') loadPopular();
   }, [tab, kind, offset, loadPopular]);
 
-  const install = (title: string, installCmd: string) => {
+  const install = (title: string, installCmd: string, key: string) => {
     const target = installCmd.replace(/^dsh plugin(?:\s+--profile\s+\S+)?\s+add\s+/, '').trim();
-    setBusy(title);
-    setStatus(null);
+    if (!target) {
+      setItemStatus((s) => ({ ...s, [key]: { kind: 'error', text: t('installMissing') } }));
+      return;
+    }
+    setBusy(key);
+    setItemStatus((s) => ({ ...s, [key]: null }));
     fetch('/dshwork/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target }),
     })
-      .then((r) => r.json())
-      .then((d) => {
-        setStatus(d.ok ? { kind: 'ok', text: `${title} ${t('installed')}` } : { kind: 'error', text: t('failed') });
+      .then(async (r) => {
+        // The host answers JSON, but a proxy/error page may not — never let a
+        // non-JSON body hide the real failure behind a generic message.
+        const text = await r.text();
+        let d: { ok?: boolean; error?: string; code?: number } = {};
+        try {
+          d = JSON.parse(text) as typeof d;
+        } catch {
+          d = { ok: false, error: text };
+        }
+        if (d.ok) {
+          setItemStatus((s) => ({ ...s, [key]: { kind: 'ok', text: `${title} ${t('installed')}` } }));
+        } else {
+          const detail = (d.error ?? text).trim().slice(0, 240);
+          setItemStatus((s) => ({
+            ...s,
+            [key]: { kind: 'error', text: detail ? `${t('failed')}: ${detail}` : t('failed') },
+          }));
+        }
         setBusy(null);
       })
-      .catch(() => {
-        setStatus({ kind: 'error', text: t('failed') });
+      .catch((err: unknown) => {
+        setItemStatus((s) => ({
+          ...s,
+          [key]: { kind: 'error', text: `${t('failed')}: ${err instanceof Error ? err.message : String(err)}` },
+        }));
         setBusy(null);
       });
   };
@@ -260,10 +286,20 @@ export function PickList({ t }: { t: Translate }): ReactElement {
                             variant: 'primary',
                             size: 'sm',
                             disabled: busy === item.fullName,
-                            onClick: () => install(item.name, item.installCommand ?? ''),
+                            onClick: () => install(item.name, item.installCommand ?? '', item.fullName),
                           }, busy === item.fullName ? t('installing') : t('install'))
                         : null,
                     ),
+                    itemStatus[item.fullName]
+                      ? h('div', {
+                          style: {
+                            ...styles.itemStatus,
+                            color: itemStatus[item.fullName]!.kind === 'ok'
+                              ? 'var(--dsw-alias-state-success-primary)'
+                              : 'var(--dsw-alias-state-warn-label)',
+                          },
+                        }, itemStatus[item.fullName]!.text)
+                      : null,
                   ),
                 ),
               ),
@@ -291,12 +327,22 @@ export function PickList({ t }: { t: Translate }): ReactElement {
                           variant: 'primary',
                           size: 'sm',
                           disabled: busy === pick.title,
-                          onClick: () => install(pick.title, pick.install),
+                          onClick: () => install(pick.title, pick.install, pick.id),
                         }, busy === pick.title ? t('installing') : t('install')),
+                    ),
+                    itemStatus[pick.id]
+                      ? h('div', {
+                          style: {
+                            ...styles.itemStatus,
+                            color: itemStatus[pick.id]!.kind === 'ok'
+                              ? 'var(--dsw-alias-state-success-primary)'
+                              : 'var(--dsw-alias-state-warn-label)',
+                          },
+                        }, itemStatus[pick.id]!.text)
+                      : null,
                   ),
                 ),
               ),
-        ),
     status
       ? h('div', {
           style: {
