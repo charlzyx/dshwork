@@ -1,0 +1,4 @@
+# @dshwork/config-dashboard bundle layer — dsh plugin add 自动挂载本包
+- insert:
+    - id: config-dashboard
+      name: '@dshwork/config-dashboard'

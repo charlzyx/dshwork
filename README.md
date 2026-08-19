@@ -6,6 +6,7 @@ charlzyx 的 DSH 插件仓库（pnpm workspace）。
 |----|------|
 | `packages/dshwork` | [@dshwork/dshwork](https://www.npmjs.com/package/@dshwork/dshwork) — 人工精选 / Pick By Human |
 | `packages/llm-provider-proxy` | [@dshwork/llm-provider-proxy](https://www.npmjs.com/package/@dshwork/llm-provider-proxy) — 按 provider 走 HTTP 代理 |
+| `packages/config-dashboard` | [@dshwork/config-dashboard](./packages/config-dashboard) — settings.yaml 可视化配置看板（schema 驱动通用编辑器 + 插件二级分类） |
 
 ## 开发
 

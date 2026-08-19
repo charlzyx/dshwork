@@ -1,0 +1,66 @@
+{
+  "name": "@dshwork/config-dashboard",
+  "version": "0.1.0",
+  "description": "Visual settings.yaml dashboard for DeepSeek Harness — schema-driven editor for every registered settings namespace.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "files": [
+    "lib",
+    "client",
+    "src",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "build": "tsc -p tsconfig.json && tsdown",
+    "prepack": "npm run build"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-schema-form": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.7"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-schema-form": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.7",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "react": "^19",
+    "tsdown": "^0.9.0",
+    "typescript": "^5",
+    "vitest": "^3",
+    "yaml": "^2.5.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

@@ -1,5 +1,7 @@
 node_modules/
 **/node_modules/
 packages/dshwork/lib/
+packages/config-dashboard/lib/
 **/client/client.js
 *.tsbuildinfo
+.pnpm-store/
