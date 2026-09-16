@@ -33,13 +33,12 @@ import https from 'node:https'
 import tls from 'node:tls'
 import { Readable } from 'node:stream'
 import { URL } from 'node:url'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-provider-proxy'
 export const inject = ['settings']
 
-const NS = settingsNamespace('dsh-provider-proxy')
+const NS = 'dsh-provider-proxy'
 
 /** Settings schema: one proxy URL and the provider routes it applies to. */
 const Config = z.object({
@@ -256,7 +255,7 @@ export function apply(ctx, config) {
     disposed = true
     globalThis.fetch = originalFetch
   })
-  installSettingsSection(ctx, NS, Config, config, {
+  ctx.settings.installSection(ctx, NS, Config, config, {
     setSource: (source) => {
       current = source
     },
